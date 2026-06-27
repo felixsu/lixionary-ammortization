@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
   calculateKPR,
@@ -15,6 +15,7 @@ import AmortizationTable from './components/AmortizationTable';
 import HistoryPanel from './components/HistoryPanel';
 import type { SavedCalculation } from './components/HistoryPanel';
 import { Sun, Moon, Sliders, BarChart3 } from 'lucide-react';
+import { trackLoanCalculation } from './utils/analytics';
 
 const DEFAULT_KPR_INPUT: KPRInput = {
   assetPrice: 1200000000,
@@ -107,6 +108,41 @@ export default function App() {
     );
   };
 
+  const kprAssetPrice = kprInput.assetPrice;
+  const kprDownPayment = kprInput.downPayment;
+  const kprTenorYears = kprInput.tenorYears;
+  const kkbAssetPrice = kkbInput.assetPrice;
+  const kkbDownPayment = kkbInput.downPayment;
+  const kkbTenorYears = kkbInput.tenorYears;
+
+  // Google Analytics Debounced Tracking
+  useEffect(() => {
+    const isKPR = loanType === 'KPR';
+    const assetPrice = isKPR ? kprAssetPrice : kkbAssetPrice;
+    const downPayment = isKPR ? kprDownPayment : kkbDownPayment;
+    const tenorYears = isKPR ? kprTenorYears : kkbTenorYears;
+    const loanAmount = Math.max(0, assetPrice - downPayment);
+
+    const timer = setTimeout(() => {
+      trackLoanCalculation({
+        loan_type: loanType,
+        asset_price: assetPrice,
+        down_payment: downPayment,
+        loan_amount: loanAmount,
+        tenor_years: tenorYears,
+      });
+    }, 3000); // 3-second debounce
+
+    return () => clearTimeout(timer);
+  }, [
+    loanType,
+    kprAssetPrice,
+    kprDownPayment,
+    kprTenorYears,
+    kkbAssetPrice,
+    kkbDownPayment,
+    kkbTenorYears,
+  ]);
 
   // Active details to suggest naming in HistoryPanel
   const activeDetails = {
